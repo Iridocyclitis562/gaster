@@ -60,3 +60,24 @@ jobs:
           if-no-files-found: warn
 
           retention-days: 30
+
+
+  build-ios:
+
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: make ios
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3.1.0
+        with:
+          name: gaster-iOS
+          path: gaster
+
+          if-no-files-found: warn
+
+          retention-days: 30
