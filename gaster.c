@@ -902,7 +902,7 @@ checkm8_check_usb_device(usb_handle_t *handle, void *pwned) {
 			usb_serial_number_string_descriptor = 0x18000082A;
 		}
 		if(cpid != 0) {
-			*(bool *)pwned = strstr(usb_serial_num, pwnd_str) != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL || strstr(usb_serial_num, " PWND:[ipwnder]") != NULL;
+			*(bool *)pwned = strstr(usb_serial_num, pwnd_str) != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL;
 			ret = true;
 		}
 		free(usb_serial_num);
@@ -1675,20 +1675,6 @@ gaster_load_file(usb_handle_t *handle, const char *ibss_filename, const char *ib
 	return ret;
 }
 
-static bool
-gaster_reset(usb_handle_t *handle) {
-{
-	init_usb_handle(handle, APPLE_VID, DFU_MODE_PID);
-	if(wait_usb_handle(handle, 0, 0, NULL, NULL)) {
-		send_usb_control_request_no_data(handle, 0x21, DFU_CLR_STATUS, 0, 0, 0, NULL);
-		reset_usb_handle(handle);
-		close_usb_handle(handle);
-	return true;
-}
-	return false;
-     }
-}
-
 int
 main(int argc, char **argv) {
 	char *env_usb_timeout = getenv("USB_TIMEOUT");
@@ -1712,10 +1698,6 @@ main(int argc, char **argv) {
 		if(gaster_decrypt_file(&handle, argv[2], argv[3])) {
 			ret = 0;
 		}
-		} else if(argc == 2 && strcmp(argv[1], "reset") == 0) {
-		if(gaster_reset(&handle)) {
-			ret = 0;
-		}
 	} else {
 		printf("Usage: env %s options\n", argv[0]);
 		puts("env:");
@@ -1725,7 +1707,6 @@ main(int argc, char **argv) {
 		puts("pwn - Put the device in pwned DFU mode");
 		puts("load iBSS iBEC - Load the untrusted boot chain");
 		puts("decrypt src dst - Decrypt file using GID0 AES key");
-		puts("reset - reset device state");
 	}
 	return ret;
 }
