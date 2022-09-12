@@ -902,7 +902,7 @@ checkm8_check_usb_device(usb_handle_t *handle, void *pwned) {
 			usb_serial_number_string_descriptor = 0x18000082A;
 		}
 		if(cpid != 0) {
-			*(bool *)pwned = strstr(usb_serial_num, pwnd_str) != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL;
+			*(bool *)pwned = strstr(usb_serial_num, pwnd_str) != NULL || strstr(usb_serial_num, " PWND:[checkm8]") != NULL || strstr(usb_serial_num, " PWND:[ipwnder]") != NULL;
 			ret = true;
 		}
 		free(usb_serial_num);
